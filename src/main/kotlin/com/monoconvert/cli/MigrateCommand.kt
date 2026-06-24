@@ -5,6 +5,7 @@ import com.github.ajalt.clikt.parameters.options.flag
 import com.github.ajalt.clikt.parameters.options.option
 import com.github.ajalt.clikt.parameters.options.required
 import com.github.ajalt.clikt.parameters.types.path
+import com.monoconvert.analysis.MigrationAnalyzer
 import com.monoconvert.config.ConfigLoader
 import com.monoconvert.discovery.RepoScanner
 import com.monoconvert.gate.CarIdGate
@@ -39,19 +40,35 @@ class MigrateCommand : CliktCommand(name = "migrate") {
         // Phase 1: carId gate + discovery.
         val carId = CarIdGate().verify(repos)
         val scanner = RepoScanner()
+        val inventories = repos.map { it to scanner.scan(it) }
 
         val sb = StringBuilder()
         sb.appendLine("monorepo: ${manifest.monorepo.name}")
         sb.appendLine("carId: $carId")
         sb.appendLine("repos: ${repos.size}${if (dryRun) " (dry-run)" else ""}")
-        for (repo in repos) {
-            val inv = scanner.scan(repo)
+        for ((repo, inv) in inventories) {
             sb.appendLine(
                 "  - ${repo.name} -> ${repo.target} | " +
-                    "build files: ${inv.buildFiles.size}, " +
-                    "lambda.json: ${inv.lambdaJsonFiles.size}"
+                    "build files: ${inv.buildFiles.size}, lambda.json: ${inv.lambdaJsonFiles.size}",
             )
         }
+
+        // Phase 2: static analysis (dry-run terminal output).
+        val report = MigrationAnalyzer().analyze(inventories)
+        sb.appendLine("monorepo version: ${report.monorepoVersion}")
+        sb.appendLine("conflicts: ${report.conflicts.size}")
+        for (c in report.conflicts) {
+            val detail = c.observations.joinToString(", ") { "${it.repo}=${it.versionExpr}" }
+            sb.appendLine("  ! ${c.key} -> ${c.winner} (was: $detail)")
+        }
+        if (report.dynamicItems.isNotEmpty()) {
+            sb.appendLine(
+                "dynamic (flagged, not pinned): " + report.dynamicItems.joinToString(", ") { it.key },
+            )
+        }
+        sb.appendLine("catalog preview:")
+        report.catalogToml.trimEnd().lines().forEach { sb.appendLine("  $it") }
+
         return sb.toString().trimEnd()
     }
 }
