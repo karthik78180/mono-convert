@@ -32,6 +32,7 @@ class BuildFileParserTest {
             it.artifact shouldBe "spring-boot-gradle-plugin"
             it.versionExpr shouldBe "3.3.0"
         }
+        contents.unparsedLines shouldBe emptyList()
     }
 
     @Test
@@ -49,5 +50,6 @@ class BuildFileParserTest {
                 ),
             )
         contents.buildscriptClasspath shouldBe emptyList()
+        contents.unparsedLines shouldBe emptyList()
     }
 }
