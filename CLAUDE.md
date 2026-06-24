@@ -6,8 +6,9 @@ Guidance for working in this repository.
 
 `mono-convert` — a Kotlin/JVM + Clikt CLI that converts standalone Gradle repos into one
 Gradle monorepo (version-catalog unification, single root-owned version, `lambda.json`
-version stripping). It is built in phases; **Phases 0–2 are implemented** (preflight, the
-`carId` gate, discovery, static analysis). See `README.md` for the user-facing overview and
+version stripping). It is built in phases; **Phases 0–3 are implemented** (preflight, the
+`carId` gate, discovery, static analysis, filesystem assembly). See `README.md` for the
+user-facing overview and
 `docs/superpowers/specs/2026-06-24-gradle-monorepo-migration-design.md` for the full design.
 
 ## Build & test commands
@@ -15,6 +16,8 @@ version stripping). It is built in phases; **Phases 0–2 are implemented** (pre
 ```bash
 ./gradlew test     # full unit suite (offline; runs against fixtures/)
 ./gradlew run --args="--manifest fixtures/repos.yaml --config fixtures/mono-convert.config.yaml --dry-run"
+# real assembly (Phase 3) writes a monorepo under --out:
+./gradlew run --args="--manifest fixtures/repos.yaml --config fixtures/mono-convert.config.yaml --out fixtures/output"
 ```
 
 **Important:** this machine's default JDK is too new for the Gradle 8.8 wrapper, and JDK 17
@@ -45,8 +48,14 @@ The pipeline runs as ordered phases. Package = pipeline stage:
   (`ConflictResolver`, highest-wins), compute the monorepo version (`MonorepoVersionCalculator`),
   and build a catalog preview (`CatalogBuilder`/`CatalogRenderer`) → `AnalysisReport`. No
   OpenRewrite, no Gradle execution.
+- `assembly/` — Phase 3 (filesystem, additive). `AssemblyPhase` materializes the template
+  (`TemplateMaterializer`), copies each repo in (`RepoCopier`), and writes the root catalog
+  (`CatalogFileWriter`), `settings.gradle` includes (`SettingsGenerator`), root version
+  (`RootPropertiesWriter`), and consolidated `meta/source.yaml` (`MetaConsolidator`) →
+  `AssemblyResult`. No OpenRewrite and no source-file mutation — those are Plan 4.
 - `cli/` — `MigrateCommand` wires the phases; the testable logic is in `runMigration(...)`,
-  separate from Clikt's `run()`.
+  separate from Clikt's `run()`. `--dry-run` stops after Phase 2; a real run assembles into
+  `--out` (required unless `--dry-run`).
 
 ## Conventions
 
@@ -58,8 +67,10 @@ The pipeline runs as ordered phases. Package = pipeline stage:
 - **Tests never clone.** Clone mode (`source: clone`, `ProcessGitCloner`) is code-supported
   but unit tests inject a throwing/capturing `GitCloner` so nothing hits the network. Keep
   it that way; tests use `source: local` against `fixtures/`.
-- **In-file mutations** (build files, `lambda.json`) will go through **OpenRewrite** in later
-  plans — readers here are read-only. Don't add ad-hoc string/JSON rewriting.
+- **In-file mutations** (build files, `lambda.json`) will go through **OpenRewrite** in Plan 4
+  — readers here are read-only. Phase 3 only *copies* source files and *writes new* root files
+  (catalog, settings, root `gradle.properties`, root `meta/source.yaml`); it never edits an
+  existing source build file or `lambda.json`. Don't add ad-hoc string/JSON rewriting.
 - **TDD:** write the failing test first, then the implementation. Match existing test style
   (JUnit 5 + Kotest assertions, real fixtures over mocks).
 
@@ -67,6 +78,9 @@ The pipeline runs as ordered phases. Package = pipeline stage:
 
 Development follows the superpowers flow: spec (`docs/superpowers/specs/`) → phased plans
 (`docs/superpowers/plans/`) → subagent-driven TDD execution with spec + code-quality review
-per task. Plans 1–2 are done; Plans 3–4 are pending. When starting the next plan, build on the
-concrete types above (`RepoInventory`, `BuildFile`, `SourceRepo`) and the analysis outputs
-(`AnalysisReport`, `CatalogModel`, `ResolvedItem`, `Semver`).
+per task. Plans 1–3 are done; Plans 4–5 are pending. When starting the next plan, build on the
+concrete types above (`RepoInventory`, `BuildFile`, `SourceRepo`), the analysis outputs
+(`AnalysisReport`, `CatalogModel`, `ResolvedItem`, `Semver`), and the Phase 3 assembly outputs
+(`AssemblyResult` and the assembled monorepo tree under `--out`). Plan 4 = OpenRewrite rewrites
+(coords→aliases, plugin aliases, version-prop stripping, buildscript relocation, `lambda.json`
+stripping); Plan 5 = validation + rollback.

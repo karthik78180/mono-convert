@@ -3,3 +3,4 @@ git:
   defaultBranch: main
 template:
   repo: "monorepo-template"
+  path: "fixtures/template"

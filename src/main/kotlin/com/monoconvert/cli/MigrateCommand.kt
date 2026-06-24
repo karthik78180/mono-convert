@@ -5,7 +5,9 @@ import com.github.ajalt.clikt.parameters.options.flag
 import com.github.ajalt.clikt.parameters.options.option
 import com.github.ajalt.clikt.parameters.options.required
 import com.github.ajalt.clikt.parameters.types.path
+import com.monoconvert.MigrationException
 import com.monoconvert.analysis.MigrationAnalyzer
+import com.monoconvert.assembly.AssemblyPhase
 import com.monoconvert.config.ConfigLoader
 import com.monoconvert.discovery.RepoScanner
 import com.monoconvert.gate.CarIdGate
@@ -19,18 +21,25 @@ class MigrateCommand : CliktCommand(name = "migrate") {
     private val configOpt: Path by option("--config", help = "Path to mono-convert.config.yaml")
         .path(mustExist = true).required()
     private val dryRun: Boolean by option("--dry-run").flag(default = false)
+    private val outOpt: Path? by option("--out", help = "Output dir for the assembled monorepo")
+        .path()
 
     private val loader = ConfigLoader()
 
     override fun run() {
-        echo(runMigration(manifestOpt, configOpt, dryRun))
+        echo(runMigration(manifestOpt, configOpt, dryRun, outOpt))
     }
 
     /**
      * Pure entrypoint used by tests; returns the human-readable summary.
      * Named distinctly from Clikt's [run] to avoid an overload collision with it.
      */
-    fun runMigration(manifestPath: Path, configPath: Path, dryRun: Boolean = false): String {
+    fun runMigration(
+        manifestPath: Path,
+        configPath: Path,
+        dryRun: Boolean = false,
+        outDir: Path? = null,
+    ): String {
         val manifest = loader.loadManifest(manifestPath)
         val toolConfig = loader.loadToolConfig(configPath)
 
@@ -68,6 +77,14 @@ class MigrateCommand : CliktCommand(name = "migrate") {
         }
         sb.appendLine("catalog preview:")
         report.catalogToml.trimEnd().lines().forEach { sb.appendLine("  $it") }
+
+        if (!dryRun) {
+            val out = outDir
+                ?: throw MigrationException("--out <dir> is required unless --dry-run")
+            val result = AssemblyPhase().assemble(manifest, toolConfig, out, carId, report, inventories)
+            sb.appendLine("assembled: ${result.monorepoDir}")
+            sb.appendLine("modules: ${result.modulePaths.joinToString(", ")}")
+        }
 
         return sb.toString().trimEnd()
     }
