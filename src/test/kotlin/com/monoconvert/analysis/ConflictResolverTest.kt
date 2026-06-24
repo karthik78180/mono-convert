@@ -37,4 +37,28 @@ class ConflictResolverTest {
         items.single().winner shouldBe null
         items.single().hasConflict shouldBe false
     }
+
+    @Test
+    fun `same version from two repos is not a conflict`() {
+        val items = ConflictResolver.resolve(
+            listOf(
+                lib("payments", "g:a", "1.0.0"),
+                lib("billing", "g:a", "1.0.0"),
+            ),
+        )
+        items.single().hasConflict shouldBe false
+        items.single().winner shouldBe Semver(1, 0, 0)
+    }
+
+    @Test
+    fun `fixed plus dynamic resolves to the fixed winner with no conflict`() {
+        val items = ConflictResolver.resolve(
+            listOf(
+                lib("payments", "com.google.guava:guava", "32.+"),
+                lib("billing", "com.google.guava:guava", "31.1.0"),
+            ),
+        )
+        items.single().winner shouldBe Semver(31, 1, 0)
+        items.single().hasConflict shouldBe false
+    }
 }
