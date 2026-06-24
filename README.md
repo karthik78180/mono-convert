@@ -6,10 +6,9 @@ single Gradle **monorepo** (multi-project build) — unifying dependency version
 the project version, and moving function version ownership out of `lambda.json` and into
 Gradle.
 
-> **Status:** Early development. This repository currently implements **Phases 0–1** of the
-> migration pipeline (preflight, identity gate, and discovery). Assembly, dependency
-> analysis, file rewrites, and validation land in later plans — see
-> [Roadmap](#roadmap).
+> **Status:** Early development. This repository currently implements **Phases 0–2** of the
+> migration pipeline (preflight, identity gate, discovery, and static analysis). Assembly,
+> file rewrites, and validation land in later plans — see [Roadmap](#roadmap).
 
 ## What it does
 
@@ -20,8 +19,9 @@ Given an input manifest listing several source repos, the tool will (when comple
    same `carId`.
 3. **Discover** — inventory each repo's build files (Groovy/Kotlin DSL), `settings`,
    `gradle.properties`, and `config/<function>/lambda.json`.
-4. **Analyze** — parse all dependency/plugin versions, resolve conflicts (highest wins),
-   and compute one monorepo version (highest existing version → bump major). *(Plan 2)*
+4. **Analyze** — parse all dependency/plugin/buildscript-classpath versions, resolve conflicts
+   (highest wins), compute one monorepo version (highest existing version → bump major), and
+   render a `libs.versions.toml` catalog preview.
 5. **Assemble** — clone a template monorepo, move each repo in as a subproject, generate
    one `gradle/libs.versions.toml`, wire `settings`, and set the root version. *(Plan 3)*
 6. **Rewrite** — rewrite build files to consume catalog aliases and strip
@@ -67,6 +67,21 @@ carId: 200009890
 repos: 2 (dry-run)
   - payments-service -> payments-service | build files: 1, lambda.json: 1
   - billing-service -> billing-service | build files: 1, lambda.json: 2
+monorepo version: 4.0.0
+conflicts: 3
+  ! com.fasterxml.jackson.core:jackson-databind -> 2.17.1 (was: payments-service=2.16.0, billing-service=2.17.1)
+  ! org.apache.commons:commons-lang3 -> 3.13.0 (was: payments-service=${commonsLangVersion}, billing-service=3.12.0)
+  ! org.junit.jupiter:junit-jupiter -> 5.10.2 (was: payments-service=5.10.0, billing-service=5.10.2)
+dynamic (flagged, not pinned): com.google.guava:guava
+catalog preview:
+  [libraries]
+  commons-lang3 = { module = "org.apache.commons:commons-lang3", version = "3.13.0" }
+  jackson-databind = { module = "com.fasterxml.jackson.core:jackson-databind", version = "2.17.1" }
+  junit-jupiter = { module = "org.junit.jupiter:junit-jupiter", version = "5.10.2" }
+  spring-boot-gradle-plugin = { module = "org.springframework.boot:spring-boot-gradle-plugin", version = "3.3.0" }
+
+  [plugins]
+  boot = { id = "org.springframework.boot", version = "3.3.0" }
 ```
 
 ### Input manifest (`repos.yaml`)
@@ -118,6 +133,7 @@ src/main/kotlin/com/monoconvert/
   source/                 # SourceRepo, GitCloner, RepoResolver
   gate/                   # SourceYaml, CarIdGate (the carId hard gate)
   discovery/              # RepoInventory, RepoScanner
+  analysis/               # Semver, parsers, ConflictResolver, catalog, MigrationAnalyzer
 fixtures/                 # local sample repos, template, manifest, config (test inputs)
 docs/superpowers/         # design spec + phased implementation plans
 ```
@@ -126,7 +142,9 @@ docs/superpowers/         # design spec + phased implementation plans
 
 - **Plan 1 — Foundation** (this PR): scaffold, fixtures, manifest/config parsing, source
   resolution, `carId` gate, discovery.
-- **Plan 2 — Analysis**: dependency/version parsing, conflict resolution, version math.
+- **Plan 2 — Analysis** (done): dependency/plugin/buildscript-classpath + version parsing,
+  conflict resolution (highest-wins), monorepo version math, and `libs.versions.toml` catalog
+  preview.
 - **Plan 3 — Assembly + Rewrites**: template clone, relocation, catalog/settings generation,
   OpenRewrite rewrites, `lambda.json` stripping.
 - **Plan 4 — Validation + Rollback**: Gradle Tooling API checks, dependency-graph diff,

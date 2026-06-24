@@ -137,8 +137,9 @@ mono-convert migrate --manifest repos.yaml [--dry-run] [--rollback] [--phase N]
   `config/**/lambda.json`; detect DSL + nested modules per repo.
 
 ### Phase 2 · Static analysis (read-only) — dry-run stops here
-- Parse every dependency declaration (build files + settings + `gradle.properties`-resolved).
-- Parse every version (deps, plugins, project versions, `lambda.json` versions).
+- Parse every dependency declaration (build files + settings + `gradle.properties`-resolved),
+  including `plugins {}` declarations (id + version) and `buildscript { dependencies { classpath } }` coordinates.
+- Parse every version (deps, plugins, buildscript classpath, project versions, `lambda.json` versions).
 - Normalize → `group:artifact ⇒ {version per repo}`.
 - Conflict detection (highest semver wins) → **Conflict Report**.
 - Compute monorepo version.
@@ -150,6 +151,9 @@ mono-convert migrate --manifest repos.yaml [--dry-run] [--rollback] [--phase N]
 - Move each repo → `./<target>/` (config/ preserved as-is).
 - Generate/fill `gradle/libs.versions.toml` from resolved versions.
 - Generate/append `settings.gradle(.kts)` `include(...)` for every discovered module (incl. nested).
+- Relocate each repo's `buildscript`/`pluginManagement` concerns to the root (root `settings.gradle`
+  owns `pluginManagement`; classpath deps surfaced by Phase 2 are centralized), so submodule build files
+  carry only their own logic.
 - Write root `gradle.properties` version = computed bump.
 - Consolidate `meta/source.yaml` to root (carId only); delete per-module copies.
 
