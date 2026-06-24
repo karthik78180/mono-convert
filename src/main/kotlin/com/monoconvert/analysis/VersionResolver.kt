@@ -26,6 +26,8 @@ object VersionResolver {
             return ResolvedVersion.Unresolved(versionExpr ?: "", "no version declared")
         }
         val expr = versionExpr.trim()
+        // Only a *pure* property reference is resolved (matchEntire). A mixed expression like
+        // "1.${minorVersion}" is treated as a literal and falls through to Unresolved.
         val match = PROP_REF.matchEntire(expr)
         val raw = if (match != null) {
             val key = match.groupValues[1]

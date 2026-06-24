@@ -15,6 +15,8 @@ data class RepoAnalysis(
 class RepoAnalyzer {
 
     fun analyze(repo: SourceRepo, inventory: RepoInventory): RepoAnalysis {
+        // Phase 2 assumes a single root gradle.properties per repo; nested-module
+        // properties are out of scope here (handled when Plan 3 walks nested modules).
         val props = inventory.gradlePropertiesFiles.firstOrNull()
             ?.let { GradlePropertiesParser.parse(it) } ?: emptyMap()
 
