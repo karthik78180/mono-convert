@@ -1,0 +1,9 @@
+{
+    "schemaversion" : "3.0.0",
+    "version" : "2.4.1",
+    "artifactId" : "invoice",
+    "depAddress" : {
+        "functionVersion" : "2.4.1",
+        "otherKey" : "value"
+    }
+}

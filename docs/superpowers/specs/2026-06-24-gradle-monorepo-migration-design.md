@@ -72,8 +72,8 @@ monorepo:
 source: clone                     # clone | local — applies to ALL repos
 path: /Users/me/work              # base dir, MANDATORY when source: local (repo = path/<name>)
 repos:
-  - { name: payments-service, target: payments }   # target optional; default = name
-  - { name: billing-service,  target: billing }
+  - payments-service
+  - billing-service
 ```
 - `source: clone` → CLI builds the clone URL from config `git.baseUrl` + repo
   `name`, clones `git.defaultBranch` into a fresh work dir (always latest).
