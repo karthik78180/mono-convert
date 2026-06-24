@@ -6,9 +6,9 @@ single Gradle **monorepo** (multi-project build) — unifying dependency version
 the project version, and moving function version ownership out of `lambda.json` and into
 Gradle.
 
-> **Status:** Early development. This repository currently implements **Phases 0–2** of the
-> migration pipeline (preflight, identity gate, discovery, and static analysis). Assembly,
-> file rewrites, and validation land in later plans — see [Roadmap](#roadmap).
+> **Status:** Early development. This repository currently implements **Phases 0–3** of the
+> migration pipeline (preflight, identity gate, discovery, static analysis, and filesystem
+> assembly). In-file rewrites and validation land in later plans — see [Roadmap](#roadmap).
 
 ## What it does
 
@@ -22,12 +22,13 @@ Given an input manifest listing several source repos, the tool will (when comple
 4. **Analyze** — parse all dependency/plugin/buildscript-classpath versions, resolve conflicts
    (highest wins), compute one monorepo version (highest existing version → bump major), and
    render a `libs.versions.toml` catalog preview.
-5. **Assemble** — clone a template monorepo, move each repo in as a subproject, generate
-   one `gradle/libs.versions.toml`, wire `settings`, and set the root version. *(Plan 3)*
-6. **Rewrite** — rewrite build files to consume catalog aliases and strip
-   `version`/`functionVersion` from each `lambda.json` (AST-safe, via OpenRewrite). *(Plan 3)*
+5. **Assemble** — materialize a template monorepo, copy each repo in as a subproject, generate
+   one `gradle/libs.versions.toml`, wire `settings`, set the root version, and consolidate
+   `meta/source.yaml` to the root.
+6. **Rewrite** — rewrite build files to consume catalog aliases, relocate buildscript concerns,
+   and strip `version`/`functionVersion` from each `lambda.json` (AST-safe, via OpenRewrite). *(Plan 4)*
 7. **Validate** — run Gradle (`projects`, dependency resolution, compile/test) and compare
-   the dependency graph before/after; commit only on success. *(Plan 4)*
+   the dependency graph before/after; commit only on success. *(Plan 5)*
 
 Full design: [`docs/superpowers/specs/2026-06-24-gradle-monorepo-migration-design.md`](docs/superpowers/specs/2026-06-24-gradle-monorepo-migration-design.md).
 
@@ -84,6 +85,23 @@ catalog preview:
   boot = { id = "org.springframework.boot", version = "3.3.0" }
 ```
 
+A real (non-dry-run) invocation assembles the monorepo into `--out` (required unless `--dry-run`):
+
+```bash
+./gradlew run --args="--manifest fixtures/repos.yaml --config fixtures/mono-convert.config.yaml --out fixtures/output"
+```
+
+It appends to the Phase 0–2 summary:
+
+```
+assembled: fixtures/output/vehicle-platform
+modules: :payments-service, :billing-service
+```
+
+…producing `fixtures/output/vehicle-platform/` with a root `settings.gradle` (one `include`
+per module), `gradle.properties` (`version=4.0.0`), `gradle/libs.versions.toml`, root
+`meta/source.yaml` (carId only), and each source repo copied in as a subproject.
+
 ### Input manifest (`repos.yaml`)
 
 `source` and `path` are root-level (one mode for the whole run). `repos` is a plain list of
@@ -111,7 +129,8 @@ git:
   baseUrl: "https://github.com/myorg"
   defaultBranch: main
 template:
-  repo: "monorepo-template"
+  repo: "monorepo-template"   # clone mode
+  path: "fixtures/template"   # local mode — the template directory copied as-is
 ```
 
 ## How to validate
@@ -134,18 +153,22 @@ src/main/kotlin/com/monoconvert/
   gate/                   # SourceYaml, CarIdGate (the carId hard gate)
   discovery/              # RepoInventory, RepoScanner
   analysis/               # Semver, parsers, ConflictResolver, catalog, MigrationAnalyzer
+  assembly/               # AssemblyPhase + writers (template, repo copy, catalog, settings, version, meta)
 fixtures/                 # local sample repos, template, manifest, config (test inputs)
 docs/superpowers/         # design spec + phased implementation plans
 ```
 
 ## Roadmap
 
-- **Plan 1 — Foundation** (this PR): scaffold, fixtures, manifest/config parsing, source
+- **Plan 1 — Foundation** (done): scaffold, fixtures, manifest/config parsing, source
   resolution, `carId` gate, discovery.
 - **Plan 2 — Analysis** (done): dependency/plugin/buildscript-classpath + version parsing,
   conflict resolution (highest-wins), monorepo version math, and `libs.versions.toml` catalog
   preview.
-- **Plan 3 — Assembly + Rewrites**: template clone, relocation, catalog/settings generation,
-  OpenRewrite rewrites, `lambda.json` stripping.
-- **Plan 4 — Validation + Rollback**: Gradle Tooling API checks, dependency-graph diff,
+- **Plan 3 — Assembly** (done): template materialization, repo copy, `gradle/libs.versions.toml`
+  + `settings` `include(...)` generation, root version, and `meta/source.yaml` consolidation
+  (additive filesystem only).
+- **Plan 4 — Rewrites** (OpenRewrite): build-file coords → catalog aliases, plugin aliases,
+  version-prop stripping, buildscript/pluginManagement relocation, `lambda.json` stripping.
+- **Plan 5 — Validation + Rollback**: Gradle Tooling API checks, dependency-graph diff,
   journal/resume, rollback, reporting.

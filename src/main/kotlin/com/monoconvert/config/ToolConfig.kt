@@ -6,7 +6,8 @@ data class GitConfig(
 )
 
 data class TemplateConfig(
-    val repo: String,
+    val repo: String? = null,   // clone mode (template repo name)
+    val path: String? = null,   // local mode (template directory, copied as-is)
 )
 
 data class ToolConfig(

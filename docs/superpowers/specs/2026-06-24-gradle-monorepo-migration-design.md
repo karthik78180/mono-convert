@@ -146,21 +146,24 @@ mono-convert migrate --manifest repos.yaml [--dry-run] [--rollback] [--phase N]
 - Capture per-repo dependency-graph **baseline** (`gradle dependencies`).
 - Emit **Migration Plan** + catalog preview. Dry-run writes nothing.
 
-### Phase 3 · Assembly (filesystem, additive into cloned template)
-- Rename template working copy to `monorepo.name`.
-- Move each repo → `./<target>/` (config/ preserved as-is).
+### Phase 3 · Assembly (filesystem, additive into cloned template) — Plan 3
+Additive filesystem only; copies trees and writes new root-level files. Never mutates an
+existing source build file or `lambda.json` (those are Phase 4). See
+[`plan-3-assembly-design.md`](2026-06-24-plan-3-assembly-design.md).
+- Materialize (copy) template working copy as `monorepo.name`.
+- Copy each repo → `./<target>/` (config/ preserved as-is); never move.
 - Generate/fill `gradle/libs.versions.toml` from resolved versions.
-- Generate/append `settings.gradle(.kts)` `include(...)` for every discovered module (incl. nested).
-- Relocate each repo's `buildscript`/`pluginManagement` concerns to the root (root `settings.gradle`
-  owns `pluginManagement`; classpath deps surfaced by Phase 2 are centralized), so submodule build files
-  carry only their own logic.
+- Generate root `settings.gradle(.kts)` `include(...)` for every discovered module (incl. nested).
 - Write root `gradle.properties` version = computed bump.
 - Consolidate `meta/source.yaml` to root (carId only); delete per-module copies.
 
-### Phase 4 · In-file rewrites (OpenRewrite, AST-safe, idempotent)
+### Phase 4 · In-file rewrites (OpenRewrite, AST-safe, idempotent) — Plan 4
 - `build.gradle(.kts)`: literal coords → `libs.*` aliases (both DSLs).
 - Strip now-centralized dependency version props; **flag** intentional local overrides (keep inline).
 - Plugin versions → catalog `[plugins]`; `plugins {}` → `alias(libs.plugins.x)`.
+- Relocate each repo's `buildscript`/`pluginManagement` concerns to the root (root `settings.gradle`
+  owns `pluginManagement`; classpath deps surfaced by Phase 2 are centralized), so submodule build files
+  carry only their own logic. (Mutates submodule build files → OpenRewrite, hence Phase 4 not Phase 3.)
 - `lambda.json`: `DeleteKey $.version` and `$.depAddress.functionVersion` (format-preserving).
 
 ### Phase 5 · Validation (Gradle Tooling API)
