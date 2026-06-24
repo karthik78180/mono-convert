@@ -18,7 +18,11 @@ data class Semver(val major: Int, val minor: Int, val patch: Int) : Comparable<S
         /** Parse the leading numeric core, ignoring any suffix; null if no `x.y.z` core is present. */
         fun parseOrNull(raw: String): Semver? {
             val m = CORE.find(raw.trim()) ?: return null
-            return Semver(m.groupValues[1].toInt(), m.groupValues[2].toInt(), m.groupValues[3].toInt())
+            return Semver(
+                m.groupValues[1].toIntOrNull() ?: return null,
+                m.groupValues[2].toIntOrNull() ?: return null,
+                m.groupValues[3].toIntOrNull() ?: return null,
+            )
         }
     }
 }

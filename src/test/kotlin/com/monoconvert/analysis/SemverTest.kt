@@ -21,6 +21,14 @@ class SemverTest {
     fun `returns null when there is no x_y_z core`() {
         Semver.parseOrNull("latest.release").shouldBeNull()
         Semver.parseOrNull("32.+").shouldBeNull()
+        Semver.parseOrNull("32.0.+").shouldBeNull()
+        Semver.parseOrNull("").shouldBeNull()
+        Semver.parseOrNull("   ").shouldBeNull()
+    }
+
+    @Test
+    fun `strips a build-metadata suffix to the numeric core`() {
+        Semver.parseOrNull("1.0.0+build.42") shouldBe Semver(1, 0, 0)
     }
 
     @Test
