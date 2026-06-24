@@ -6,8 +6,8 @@ Guidance for working in this repository.
 
 `mono-convert` — a Kotlin/JVM + Clikt CLI that converts standalone Gradle repos into one
 Gradle monorepo (version-catalog unification, single root-owned version, `lambda.json`
-version stripping). It is built in phases; **Phases 0–1 are implemented** (preflight, the
-`carId` gate, discovery). See `README.md` for the user-facing overview and
+version stripping). It is built in phases; **Phases 0–2 are implemented** (preflight, the
+`carId` gate, discovery, static analysis). See `README.md` for the user-facing overview and
 `docs/superpowers/specs/2026-06-24-gradle-monorepo-migration-design.md` for the full design.
 
 ## Build & test commands
@@ -39,6 +39,12 @@ The pipeline runs as ordered phases. Package = pipeline stage:
   closed unless all `carId`s match.
 - `discovery/` — `RepoScanner` walks a repo → `RepoInventory` (build files w/ `Dsl`,
   settings, `gradle.properties`, `config/<function>/lambda.json`).
+- `analysis/` — Phase 2 (read-only). `RepoAnalyzer`/`MigrationAnalyzer` parse deps, plugins,
+  buildscript classpath, and project/`lambda.json` versions (`BuildFileParser`,
+  `GradlePropertiesParser`, `LambdaJsonReader`, `Semver`, `VersionResolver`), resolve conflicts
+  (`ConflictResolver`, highest-wins), compute the monorepo version (`MonorepoVersionCalculator`),
+  and build a catalog preview (`CatalogBuilder`/`CatalogRenderer`) → `AnalysisReport`. No
+  OpenRewrite, no Gradle execution.
 - `cli/` — `MigrateCommand` wires the phases; the testable logic is in `runMigration(...)`,
   separate from Clikt's `run()`.
 
@@ -61,5 +67,6 @@ The pipeline runs as ordered phases. Package = pipeline stage:
 
 Development follows the superpowers flow: spec (`docs/superpowers/specs/`) → phased plans
 (`docs/superpowers/plans/`) → subagent-driven TDD execution with spec + code-quality review
-per task. Plan 1 is done; Plans 2–4 are pending. When starting the next plan, build on the
-concrete types above (`RepoInventory`, `BuildFile`, `SourceRepo`).
+per task. Plans 1–2 are done; Plans 3–4 are pending. When starting the next plan, build on the
+concrete types above (`RepoInventory`, `BuildFile`, `SourceRepo`) and the analysis outputs
+(`AnalysisReport`, `CatalogModel`, `ResolvedItem`, `Semver`).
