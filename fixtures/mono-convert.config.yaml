@@ -1,0 +1,5 @@
+git:
+  baseUrl: "https://github.com/myorg"
+  defaultBranch: main
+template:
+  repo: "monorepo-template"

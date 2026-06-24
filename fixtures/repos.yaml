@@ -1,0 +1,7 @@
+monorepo:
+  name: vehicle-platform
+source: local
+path: fixtures/source-repos
+repos:
+  - payments-service
+  - billing-service
